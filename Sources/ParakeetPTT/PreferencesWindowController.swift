@@ -2,10 +2,16 @@ import AppKit
 import SwiftUI
 
 final class PreferencesWindowController: NSWindowController {
-    init(appState: AppState, onAutoPasteChanged: @escaping (Bool) -> Void, onOpenPrivacy: @escaping () -> Void) {
+    init(
+        appState: AppState,
+        onAutoPasteChanged: @escaping (Bool) -> Void,
+        onMuteAudioChanged: @escaping (Bool) -> Void,
+        onOpenPrivacy: @escaping () -> Void
+    ) {
         let view = PreferencesView(
             appState: appState,
             onAutoPasteChanged: onAutoPasteChanged,
+            onMuteAudioChanged: onMuteAudioChanged,
             onOpenPrivacy: onOpenPrivacy
         )
         let hosting = NSHostingController(rootView: view)
@@ -26,6 +32,7 @@ final class PreferencesWindowController: NSWindowController {
 struct PreferencesView: View {
     @ObservedObject var appState: AppState
     var onAutoPasteChanged: (Bool) -> Void
+    var onMuteAudioChanged: (Bool) -> Void
     var onOpenPrivacy: () -> Void
 
     var body: some View {
@@ -49,6 +56,10 @@ struct PreferencesView: View {
                 Toggle("Paste transcript automatically", isOn: $appState.autoPaste)
                     .onChange(of: appState.autoPaste) { _, value in
                         onAutoPasteChanged(value)
+                    }
+                Toggle("Mute audio while listening", isOn: $appState.muteAudioWhileListening)
+                    .onChange(of: appState.muteAudioWhileListening) { _, value in
+                        onMuteAudioChanged(value)
                     }
             }
 

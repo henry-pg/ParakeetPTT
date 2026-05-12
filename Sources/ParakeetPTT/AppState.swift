@@ -9,4 +9,5 @@ final class AppState: ObservableObject {
     @Published var lastTranscript = ""
     @Published var lastError: String?
     @Published var autoPaste = true
+    @Published var muteAudioWhileListening = true
 }

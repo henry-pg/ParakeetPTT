@@ -11,11 +11,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let recordingHUD = RecordingHUDWindowController()
     private var hotkeyError: String?
     private var targetAppForPaste: NSRunningApplication?
+    private var audioMuteToken: MediaController.MuteToken?
     private var statusItem: NSStatusItem?
     private var preferencesWindowController: PreferencesWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         appState.autoPaste = settings.autoPaste
+        appState.muteAudioWhileListening = settings.muteAudioWhileListening
         recorder.onLevel = { [weak self] level in
             Task { @MainActor in
                 self?.recordingHUD.updateAudioLevel(level)
@@ -29,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         hotkeyController.stop()
         _ = recorder.stop()
+        stopMutingAudioIfNeeded()
     }
 
     private func setupMenu() {
@@ -51,6 +54,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let autoPaste = NSMenuItem(title: "Paste Automatically", action: #selector(toggleAutoPaste), keyEquivalent: "")
         autoPaste.state = appState.autoPaste ? .on : .off
         menu.addItem(autoPaste)
+
+        let muteAudio = NSMenuItem(title: "Mute Audio While Listening", action: #selector(toggleMuteAudio), keyEquivalent: "")
+        muteAudio.state = appState.muteAudioWhileListening ? .on : .off
+        menu.addItem(muteAudio)
 
         let copyLast = NSMenuItem(title: "Copy Last Transcript", action: #selector(copyLastTranscript), keyEquivalent: "")
         copyLast.isEnabled = !appState.lastTranscript.isEmpty
@@ -126,10 +133,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !appState.isRecording, !appState.isTranscribing else { return }
         targetAppForPaste = NSWorkspace.shared.frontmostApplication
         NSLog("ParakeetPTT target app for paste: \(targetAppForPaste?.localizedName ?? "unknown")")
+        audioMuteToken = nil
+        if appState.muteAudioWhileListening {
+            let muteToken = MediaController.muteSystemAudioForRecording()
+            audioMuteToken = muteToken.isMuting ? muteToken : nil
+        }
 
         Task {
             guard await PermissionManager.requestMicrophoneAccess() else {
                 await MainActor.run {
+                    stopMutingAudioIfNeeded()
                     appState.status = "Microphone denied"
                     appState.lastError = "Microphone permission is required."
                     rebuildMenu()
@@ -149,6 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             } catch {
                 await MainActor.run {
+                    stopMutingAudioIfNeeded()
                     appState.status = "Recording failed"
                     appState.lastError = error.localizedDescription
                     recordingHUD.hide()
@@ -159,9 +173,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func stopRecordingAndTranscribe() {
-        guard appState.isRecording else { return }
+        guard appState.isRecording else {
+            stopMutingAudioIfNeeded()
+            return
+        }
 
         let samples = recorder.stop()
+        stopMutingAudioIfNeeded()
         appState.isRecording = false
         statusItem?.button?.title = "◉"
         let duration = Double(samples.count) / 16_000.0
@@ -237,6 +255,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         rebuildMenu()
     }
 
+    @objc private func toggleMuteAudio() {
+        appState.muteAudioWhileListening.toggle()
+        settings.muteAudioWhileListening = appState.muteAudioWhileListening
+        rebuildMenu()
+    }
+
     @objc private func copyLastTranscript() {
         guard !appState.lastTranscript.isEmpty else { return }
         NSPasteboard.general.clearContents()
@@ -251,6 +275,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 appState: appState,
                 onAutoPasteChanged: { [weak self] value in
                     self?.settings.autoPaste = value
+                    self?.rebuildMenu()
+                },
+                onMuteAudioChanged: { [weak self] value in
+                    self?.settings.muteAudioWhileListening = value
                     self?.rebuildMenu()
                 },
                 onOpenPrivacy: { PermissionManager.openPrivacySettings() }
@@ -275,5 +303,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return partial + value * value
         }
         return sqrt(sum / Double(samples.count))
+    }
+
+    private func stopMutingAudioIfNeeded() {
+        guard let audioMuteToken else { return }
+        self.audioMuteToken = nil
+        MediaController.unmuteSystemAudioAfterRecording(audioMuteToken)
     }
 }

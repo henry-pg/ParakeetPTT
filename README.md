@@ -4,6 +4,8 @@ Parakeet PTT is a small macOS menu bar app for local push-to-talk speech transcr
 
 It records while you hold `Option-/`, transcribes locally with FluidAudio's CoreML build of NVIDIA Parakeet TDT v2, copies the transcript to the clipboard, and tries to insert it into the active app.
 
+It can also temporarily mute the current system output while push-to-talk is active, then restore your previous mute and volume state when you release the hotkey.
+
 There is no Whisper, OpenAI API, cloud transcription, translation, summarization, or background meeting mode.
 
 ## Requirements
@@ -85,7 +87,7 @@ After transcription:
 - The app attempts automatic insertion.
 - If automatic insertion fails, press `Cmd-V` manually.
 
-The menu bar item also includes **Copy Last Transcript**.
+The menu bar item also includes **Mute Audio While Listening** and **Copy Last Transcript**.
 
 ## Build Scripts
 
@@ -120,6 +122,7 @@ Builds the app and installs it to:
 - `AudioRecorder`: captures microphone audio with `AVAudioEngine`.
 - `ParakeetTranscriber`: loads and runs FluidAudio Parakeet v2 locally.
 - `HotkeyController`: registers the global `Option-/` push-to-talk hotkey.
+- `MediaController`: temporarily mutes and restores the current output device during push-to-talk.
 - `RecordingHUDWindowController`: displays the floating waveform HUD.
 - `TextInjector`: copies the transcript and attempts automatic insertion.
 
@@ -127,6 +130,7 @@ Builds the app and installs it to:
 
 - This app is English-only because it intentionally uses Parakeet v2.
 - The first transcription may take longer while the model loads.
+- Audio muting changes the current output device mute/volume state while the hotkey is held; playback keeps progressing silently.
 - Terminal apps can be harder to insert into than standard text fields; the transcript still remains on the clipboard.
 - The repository intentionally ignores `.build/`, downloaded models, and local app bundles.
 
